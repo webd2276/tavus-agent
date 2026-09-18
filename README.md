@@ -24,8 +24,9 @@ qualifies the lead → Google Sheets / Gmail / Google Calendar follow-up
 
 ## 1. Set up Tavus
 
-1. In the Tavus dashboard, create and configure Zain in the **PAL Builder**.
-   Add the sales-agent instructions there and copy the resulting `pal_id`.
+1. Create the public-site default PAL in Tavus once, then add its `pal_id`
+   below. After the app is deployed, use **/dashboard** to manage its PALs;
+   dashboard changes are proxied directly to Tavus.
 2. If the PAL requires a particular face, copy its `face_id`; otherwise leave
    `TAVUS_FACE_ID` blank.
 3. Create a deployment for the PAL. In its **Limits & security** panel, add
@@ -57,6 +58,17 @@ TAVUS_CALLBACK_URL=https://your-ngrok-forwarding-url/api/webhooks/tavus
 
 Restart the dev server after changing environment variables. Use a stable,
 HTTPS production URL for `TAVUS_CALLBACK_URL` when deploying.
+
+## 2a. Set up Supabase for the PAL dashboard
+
+1. Create a Supabase project, then open its SQL Editor and run
+   `supabase/migrations/0001_init.sql` from this repository.
+2. Copy the project URL and anon key into `NEXT_PUBLIC_SUPABASE_URL` and
+   `NEXT_PUBLIC_SUPABASE_ANON_KEY` in `.env.local`.
+3. For local development, turn off **Confirm email** in
+   **Authentication → Settings**. Keep it enabled for a production app unless
+   you have completed the email confirmation flow.
+4. Create an account at `/signup`, sign in at `/login`, and open `/dashboard`.
 
 ## 3. Set up n8n
 
