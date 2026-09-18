@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useCallback, useState } from "react";
 
 type CallState = "idle" | "starting" | "active" | "error" | "ended";
@@ -54,7 +55,7 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-[#0F1417] text-[#EDEFF1]">
       <div className="mx-auto max-w-5xl px-6 py-16 md:py-24">
-        <div className="mb-16">
+        <div className="mb-16 flex items-start justify-between gap-6">
           <Image
             src="/logo.png"
             alt="Zain AI Video Sales Agent"
@@ -63,6 +64,12 @@ export default function Home() {
             className="h-10 w-auto object-contain"
             priority
           />
+          <Link
+            href="/login"
+            className="text-sm text-[#7C848B] transition-colors hover:text-[#B7BEC4]"
+          >
+            Dashboard login
+          </Link>
         </div>
         {state !== "active" ? (
           <>

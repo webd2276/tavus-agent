@@ -19,7 +19,7 @@ function LoginForm() {
     if (error) return setError(error.message);
     router.push(params.get("next") || "/dashboard"); router.refresh();
   }
-  return <AuthShell title="Sign in" onSubmit={submit} error={error} loading={loading} submit="Sign in" alternate={<><span>New here? </span><Link href="/signup" className="underline">Create an account</Link></>} />;
+  return <div className="relative"><Link href="/" className="absolute left-6 top-6 text-sm text-[#7C848B] transition-colors hover:text-[#B7BEC4]">← Back to site</Link><AuthShell title="Sign in" onSubmit={submit} error={error} loading={loading} submit="Sign in" alternate={<><span>New here? </span><Link href="/signup" className="underline">Create an account</Link></>} /></div>;
 }
 
 export default function LoginPage() {
