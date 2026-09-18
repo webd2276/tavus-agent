@@ -25,6 +25,7 @@ export async function POST(_: NextRequest, { params }: { params: { id: string } 
     const { error } = await supabase.from("meetings").insert({
       owner_id: user.id,
       pal_id: pal.id,
+      kind: "instant",
       tavus_conversation_id: conversation.conversation_id,
       join_url: conversation.conversation_url,
     });
