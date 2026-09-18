@@ -13,6 +13,13 @@ interface TavusConversationResponse {
   status: string;
 }
 
+export class TavusApiError extends Error {
+  constructor(public readonly status: number) {
+    super(`Tavus API request failed with status ${status}`);
+    this.name = "TavusApiError";
+  }
+}
+
 export async function createTavusConversation(
   { visitorId }: CreateConversationParams
 ): Promise<TavusConversationResponse> {
@@ -39,8 +46,9 @@ export async function createTavusConversation(
   });
 
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Tavus API error (${res.status}): ${text}`);
+    // Do not include the provider response in errors: it may contain
+    // account details that should only be visible in Tavus itself.
+    throw new TavusApiError(res.status);
   }
 
   return res.json();
@@ -59,8 +67,7 @@ export async function endTavusConversation(conversationId: string) {
   );
 
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Tavus API error (${res.status}): ${text}`);
+    throw new TavusApiError(res.status);
   }
 
   return res.json();

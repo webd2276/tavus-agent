@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { createTavusConversation } from "@/lib/tavus";
+import { createTavusConversation, TavusApiError } from "@/lib/tavus";
 
 const bodySchema = z.object({
   visitor_id: z.string().min(1).max(200),
@@ -40,10 +40,18 @@ export async function POST(req: NextRequest) {
       status: conversation.status,
     });
     // Note: TAVUS_API_KEY never leaves this function — it is not in the response.
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Failed to create Tavus conversation", err);
+
+    if (err instanceof TavusApiError && (err.status === 401 || err.status === 403)) {
+      return NextResponse.json(
+        { error: "Video conversations are temporarily unavailable." },
+        { status: 503 }
+      );
+    }
+
     return NextResponse.json(
-      { error: "Could not start the video conversation. Error: " + err.message },
+      { error: "Could not start the video conversation. Please try again." },
       { status: 502 }
     );
   }
