@@ -65,7 +65,52 @@ export type TavusPalInput = {
   longest_call_minutes?: number | null;
 };
 
-export type TavusPal = TavusPalInput & { pal_id: string };
+export type TavusPal = { pal_id: string; pal_name?: string };
+
+type TavusPalPayload = {
+  pal_name: string;
+  pipeline_mode: "full";
+  system_prompt: string;
+  default_face_id: string;
+  layers?: { tts?: { voice_id: string } };
+};
+
+type TavusPatchOperation = { op: "replace"; path: string; value: string };
+
+function toTavusPalPayload(input: TavusPalInput): TavusPalPayload {
+  if (!input.face_id) throw new Error("A Tavus default Face ID is required");
+
+  const systemPrompt = [
+    input.identity_role && `Role: ${input.identity_role}`,
+    input.short_description && `Purpose: ${input.short_description}`,
+    input.objectives && `Objectives: ${input.objectives}`,
+    input.greeting && `Start the conversation with: ${input.greeting}`,
+    input.guardrails?.length && `Guardrails:\n${input.guardrails.map((guardrail) => `- ${guardrail}`).join("\n")}`,
+  ].filter(Boolean).join("\n\n") || `You are ${input.name}, a helpful AI assistant.`;
+
+  return {
+    pal_name: input.name,
+    pipeline_mode: "full",
+    system_prompt: systemPrompt,
+    default_face_id: input.face_id,
+    ...(input.voice_id ? { layers: { tts: { voice_id: input.voice_id } } } : {}),
+  };
+}
+
+function toTavusPalPatch(input: TavusPalInput): TavusPatchOperation[] {
+  const payload = toTavusPalPayload(input);
+  const operations: TavusPatchOperation[] = [
+    { op: "replace", path: "/pal_name", value: payload.pal_name },
+    { op: "replace", path: "/system_prompt", value: payload.system_prompt },
+    { op: "replace", path: "/default_face_id", value: payload.default_face_id },
+  ];
+
+  if (payload.layers?.tts?.voice_id) {
+    operations.push({ op: "replace", path: "/layers/tts/voice_id", value: payload.layers.tts.voice_id });
+  }
+
+  return operations;
+}
 
 async function tavusPalRequest(path: string, init?: RequestInit) {
   const apiKey = process.env.TAVUS_API_KEY;
@@ -79,7 +124,7 @@ async function tavusPalRequest(path: string, init?: RequestInit) {
 }
 
 export async function createTavusPal(input: TavusPalInput): Promise<TavusPal> {
-  return tavusPalRequest("/pals", { method: "POST", body: JSON.stringify(input) });
+  return tavusPalRequest("/pals", { method: "POST", body: JSON.stringify(toTavusPalPayload(input)) });
 }
 
 export async function getTavusPal(palId: string): Promise<TavusPal> {
@@ -87,7 +132,7 @@ export async function getTavusPal(palId: string): Promise<TavusPal> {
 }
 
 export async function updateTavusPal(palId: string, input: TavusPalInput): Promise<TavusPal> {
-  return tavusPalRequest(`/pals/${encodeURIComponent(palId)}`, { method: "PATCH", body: JSON.stringify(input) });
+  return tavusPalRequest(`/pals/${encodeURIComponent(palId)}`, { method: "PATCH", body: JSON.stringify(toTavusPalPatch(input)) });
 }
 
 export async function deleteTavusPal(palId: string): Promise<void> {

@@ -13,7 +13,7 @@ export type PalValues = {
 const optionalFields: Array<[keyof PalValues, string, string]> = [
   ["short_description", "Short description", "What this PAL helps with"], ["identity_role", "Identity / role", "Sales assistant"],
   ["greeting", "Greeting", "Hello, how can I help?"], ["objectives", "Objectives", "Qualify prospective customers"],
-  ["face_id", "Face ID", "Optional Tavus face ID"], ["voice_id", "Voice ID", "Optional Tavus voice ID"],
+  ["face_id", "Default Face ID", "Required Tavus face ID"], ["voice_id", "Voice ID", "Optional Tavus voice ID"],
   ["conferencing_username", "Conferencing username", "Optional meeting handle"],
 ];
 const numberFields: Array<[keyof PalValues, string]> = [["calls_per_day", "Calls per day"], ["calls_per_visitor", "Calls per visitor"], ["longest_call_minutes", "Longest call (minutes)"]];
@@ -36,7 +36,7 @@ export function PalForm({ initialValues, palId }: { initialValues?: PalValues; p
     router.push(`/dashboard/pals/${data.pal.id}`); router.refresh();
   }
   return <form onSubmit={submit} className="mt-8 grid max-w-2xl gap-5"><label>Name<input required name="name" defaultValue={initialValues?.name} className="mt-1 w-full rounded bg-[#182025] p-2" /></label>
-    {optionalFields.map(([key, label, placeholder]) => <label key={key}>{label}<input name={key} defaultValue={initialValues?.[key] ?? ""} placeholder={placeholder} className="mt-1 w-full rounded bg-[#182025] p-2" /></label>)}
+    {optionalFields.map(([key, label, placeholder]) => <label key={key}>{label}<input name={key} required={key === "face_id"} defaultValue={initialValues?.[key] ?? ""} placeholder={placeholder} className="mt-1 w-full rounded bg-[#182025] p-2" /></label>)}
     <label>Guardrails (one per line)<textarea name="guardrails" defaultValue={initialValues?.guardrails?.join("\n") ?? ""} className="mt-1 min-h-28 w-full rounded bg-[#182025] p-2" /></label>
     <label>Allowed websites (comma-separated URLs)<input name="allowed_websites" defaultValue={initialValues?.allowed_websites?.join(", ") ?? ""} placeholder="https://example.com, https://app.example.com" className="mt-1 w-full rounded bg-[#182025] p-2" /></label>
     <div className="grid gap-4 sm:grid-cols-3">{numberFields.map(([key, label]) => <label key={key}>{label}<input name={key} type="number" min="1" defaultValue={initialValues?.[key] ?? ""} className="mt-1 w-full rounded bg-[#182025] p-2" /></label>)}</div>

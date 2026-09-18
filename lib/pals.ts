@@ -10,7 +10,7 @@ export const palSchema = z.object({
   greeting: nullableText,
   guardrails: z.array(z.string().trim().min(1).max(5_000)).max(50).default([]),
   objectives: nullableText,
-  face_id: nullableText,
+  face_id: z.string().trim().min(1, "A Tavus default Face ID is required.").max(20_000),
   voice_id: nullableText,
   conferencing_username: nullableText,
   allowed_websites: z.array(z.string().trim().url().max(2_000)).max(100).default([]),
