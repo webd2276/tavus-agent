@@ -1,0 +1,263 @@
+{
+  "name": "Tavus B2B Lead Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "tavus-lead",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "webhook-node",
+      "name": "Tavus Event Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-1200, 0],
+      "webhookId": "tavus-lead"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "secret-check",
+              "leftValue": "={{ $json.headers['x-webhook-secret'] }}",
+              "rightValue": "={{ $env.WEBHOOK_SHARED_SECRET }}",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "secret-check-node",
+      "name": "Verify Shared Secret",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [-980, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "event-type-check",
+              "leftValue": "={{ $json.body.event_type }}",
+              "rightValue": "application.transcription_ready",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "event-filter-node",
+      "name": "Is Transcript Ready?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [-760, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://tavusapi.com/v2/conversations/{{ $json.body.conversation_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "x-api-key", "value": "={{ $env.TAVUS_API_KEY }}" }]
+        },
+        "options": {}
+      },
+      "id": "get-transcript-node",
+      "name": "Fetch Full Transcript",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-540, -100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: \"claude-sonnet-4-6\",\n  max_tokens: 1000,\n  system: \"You extract structured B2B sales leads from a call transcript. Reply with ONLY valid JSON matching this schema, no prose, no markdown fences: { lead: { full_name, email, phone, company_name, job_title, industry, company_size, country, business_problem, desired_outcome, current_solution, timeline, budget_range, decision_role, meeting_requested }, qualification: { need, fit, urgency, authority, budget, status, reason } }. Use null for anything not mentioned. status must be one of qualified, partially_qualified, unqualified, needs_human_review, unknown.\",\n  messages: [ { role: \"user\", content: \"Transcript:\\n\" + JSON.stringify($json.transcript || $json.body) } ]\n}) }}"
+      },
+      "id": "extract-lead-node",
+      "name": "Extract + Qualify Lead (Claude)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-320, -100]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json.content[0].text;\nlet parsed;\ntry {\n  parsed = JSON.parse(raw.replace(/```json|```/g, '').trim());\n} catch (e) {\n  parsed = { lead: {}, qualification: { status: 'needs_human_review', reason: 'parse_error' } };\n}\nreturn [{ json: parsed }];"
+      },
+      "id": "parse-json-node",
+      "name": "Parse Structured Lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-100, -100]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "mode": "list", "value": "REPLACE_WITH_YOUR_SHEET_ID" },
+        "sheetName": { "mode": "list", "value": "Leads" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "full_name": "={{ $json.lead.full_name }}",
+            "email": "={{ $json.lead.email }}",
+            "phone": "={{ $json.lead.phone }}",
+            "company_name": "={{ $json.lead.company_name }}",
+            "job_title": "={{ $json.lead.job_title }}",
+            "industry": "={{ $json.lead.industry }}",
+            "business_problem": "={{ $json.lead.business_problem }}",
+            "timeline": "={{ $json.lead.timeline }}",
+            "status": "={{ $json.qualification.status }}",
+            "reason": "={{ $json.qualification.reason }}",
+            "received_at": "={{ $now.toISO() }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "sheets-node",
+      "name": "Save Lead to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [120, -100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "qualified-check",
+              "leftValue": "={{ $('Parse Structured Lead').item.json.qualification.status }}",
+              "rightValue": "unqualified",
+              "operator": { "type": "string", "operation": "notEquals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "qualified-filter-node",
+      "name": "Is Worth Notifying Sales?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [340, -100]
+    },
+    {
+      "parameters": {
+        "sendTo": "sales-team@yourcompany.com",
+        "subject": "=New lead from Zain: {{ $('Parse Structured Lead').item.json.lead.company_name || $('Parse Structured Lead').item.json.lead.full_name || 'unknown visitor' }} ({{ $('Parse Structured Lead').item.json.qualification.status }})",
+        "message": "=Business problem: {{ $('Parse Structured Lead').item.json.lead.business_problem }}\nDesired outcome: {{ $('Parse Structured Lead').item.json.lead.desired_outcome }}\nTimeline: {{ $('Parse Structured Lead').item.json.lead.timeline }}\nContact: {{ $('Parse Structured Lead').item.json.lead.full_name }} — {{ $('Parse Structured Lead').item.json.lead.email }} — {{ $('Parse Structured Lead').item.json.lead.phone }}\nQualification: {{ $('Parse Structured Lead').item.json.qualification.status }} — {{ $('Parse Structured Lead').item.json.qualification.reason }}",
+        "options": {}
+      },
+      "id": "notify-sales-node",
+      "name": "Notify Sales Team",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [560, -180]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "meeting-requested-check",
+              "leftValue": "={{ $('Parse Structured Lead').item.json.lead.meeting_requested }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            },
+            {
+              "id": "has-email-check",
+              "leftValue": "={{ $('Parse Structured Lead').item.json.lead.email }}",
+              "rightValue": "",
+              "operator": { "type": "string", "operation": "notEmpty" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "meeting-filter-node",
+      "name": "Did Visitor Ask For a Meeting?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [560, 60]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "calendar": { "mode": "list", "value": "primary" },
+        "start": "={{ $now.plus({ days: 1 }).set({ hour: 10, minute: 0, second: 0 }).toISO() }}",
+        "end": "={{ $now.plus({ days: 1 }).set({ hour: 10, minute: 30, second: 0 }).toISO() }}",
+        "additionalFields": {
+          "summary": "={{ $('Parse Structured Lead').item.json.lead.company_name || $('Parse Structured Lead').item.json.lead.full_name }} <> Our Team",
+          "description": "=Follow-up call booked by Zain (AI sales assistant).\nBusiness problem: {{ $('Parse Structured Lead').item.json.lead.business_problem }}\nDesired outcome: {{ $('Parse Structured Lead').item.json.lead.desired_outcome }}",
+          "attendeesUi": {
+            "attendeeValues": [{ "email": "={{ $('Parse Structured Lead').item.json.lead.email }}" }]
+          },
+          "conferenceDataUi": {
+            "conferenceDataValues": {
+              "conferenceSolution": "hangoutsMeet"
+            }
+          }
+        }
+      },
+      "id": "create-meeting-node",
+      "name": "Create Google Meet Event",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [780, 60],
+      "notes": "MVP default: books tomorrow 10:00-10:30 in the account's local timezone. Replace with a real availability check (Google_Calendar__suggest_time / Calendly) before production so it can't double-book or offer a taken slot."
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Parse Structured Lead').item.json.lead.email }}",
+        "subject": "Your meeting with our team is booked",
+        "message": "=Hi {{ $('Parse Structured Lead').item.json.lead.full_name || 'there' }},\n\nThanks for chatting with Zain. Your call is booked for {{ $json.start.dateTime }}.\n\nJoin with Google Meet: {{ $json.hangoutLink }}\n\nSee you then!",
+        "options": {}
+      },
+      "id": "confirm-meeting-node",
+      "name": "Send Meeting Confirmation to Lead",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1000, 60]
+    }
+  ],
+  "connections": {
+    "Tavus Event Webhook": { "main": [[{ "node": "Verify Shared Secret", "type": "main", "index": 0 }]] },
+    "Verify Shared Secret": { "main": [[{ "node": "Is Transcript Ready?", "type": "main", "index": 0 }], []] },
+    "Is Transcript Ready?": { "main": [[{ "node": "Fetch Full Transcript", "type": "main", "index": 0 }], []] },
+    "Fetch Full Transcript": { "main": [[{ "node": "Extract + Qualify Lead (Claude)", "type": "main", "index": 0 }]] },
+    "Extract + Qualify Lead (Claude)": { "main": [[{ "node": "Parse Structured Lead", "type": "main", "index": 0 }]] },
+    "Parse Structured Lead": { "main": [[{ "node": "Save Lead to Google Sheets", "type": "main", "index": 0 }]] },
+    "Save Lead to Google Sheets": { "main": [[{ "node": "Is Worth Notifying Sales?", "type": "main", "index": 0 }, { "node": "Did Visitor Ask For a Meeting?", "type": "main", "index": 0 }]] },
+    "Is Worth Notifying Sales?": {
+      "main": [
+        [
+          { "node": "Notify Sales Team", "type": "main", "index": 0 }
+        ],
+        []
+      ]
+    },
+    "Did Visitor Ask For a Meeting?": { "main": [[{ "node": "Create Google Meet Event", "type": "main", "index": 0 }], []] },
+    "Create Google Meet Event": { "main": [[{ "node": "Send Meeting Confirmation to Lead", "type": "main", "index": 0 }]] }
+  }
+}
