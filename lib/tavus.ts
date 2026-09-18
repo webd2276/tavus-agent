@@ -37,7 +37,7 @@ export async function createTavusConversation(
       pal_id: palId,
       ...(faceId ? { face_id: faceId } : {}),
       callback_url: callbackUrl,
-      properties: { visitor_id: visitorId },
+      conversation_name: `visitor-${visitorId}`,
     }),
   });
 
