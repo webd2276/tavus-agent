@@ -2,7 +2,6 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-
 export type PalValues = {
   name: string; short_description?: string | null; identity_role?: string | null; greeting?: string | null;
   guardrails?: string[]; objectives?: string | null; face_id?: string | null; voice_id?: string | null;

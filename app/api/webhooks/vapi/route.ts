@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { markEventForwarded, recordProviderEvent } from "@/lib/events";
+import { parseJsonBody } from "@/lib/http";
 
 // Vapi may retry an end-of-call report. Keep a small in-memory set so a
 // retried delivery does not start the same n8n automation twice. Replace this
@@ -12,13 +14,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = await req.json().catch(() => null);
+  const body = await parseJsonBody<Record<string, any>>(req);
   if (!body) {
     console.error("Invalid Vapi webhook payload");
     return NextResponse.json({ status: "received" });
   }
 
   const callId = body.message?.call?.id;
+  const eventType = typeof body.message?.type === "string" ? body.message.type : "unknown";
+  const eventId = typeof body.message?.id === "string" ? body.message.id : typeof callId === "string" ? `${eventType}:${callId}` : null;
+  const durable = eventId ? await recordProviderEvent({ source: "vapi", eventType, eventId, conversationId: callId, payload: body }) : null;
+  if (durable?.duplicate) return NextResponse.json({ status: "received" });
   if (typeof callId === "string" && callId) {
     if (seenCallIds.has(callId)) {
       return NextResponse.json({ status: "received" });
@@ -30,7 +36,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  console.log("Vapi webhook event:", body.message?.type, callId);
+  console.log("Vapi webhook event:", eventType, callId);
 
   const n8nUrl = process.env.N8N_WEBHOOK_URL;
   if (!n8nUrl) {
@@ -50,9 +56,15 @@ export async function POST(req: NextRequest) {
     body: JSON.stringify(n8nPayload),
   })
     .then(async (res) => {
-      if (!res.ok) console.error("n8n forwarding failed", res.status, await res.text());
+      if (!res.ok) {
+        console.error("n8n forwarding failed", res.status);
+        if (eventId) await markEventForwarded("vapi", eventId, `n8n returned ${res.status}`);
+      } else if (eventId) await markEventForwarded("vapi", eventId);
     })
-    .catch((err) => console.error("Error forwarding Vapi webhook to n8n", err));
+    .catch(async (err) => {
+      console.error("Error forwarding Vapi webhook", err instanceof Error ? err.message : "unknown error");
+      if (eventId) await markEventForwarded("vapi", eventId, "n8n delivery failed");
+    });
 
   return NextResponse.json({ status: "received" });
 }

@@ -61,6 +61,70 @@
     },
     {
       "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "channel-check",
+              "leftValue": "={{ $json.body.source }}",
+              "rightValue": "vapi",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "route-channel-node",
+      "name": "Route by Channel",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [-980, 120]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "vapi-event-check",
+              "leftValue": "={{ $json.body.message.type }}",
+              "rightValue": "end-of-call-report",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "vapi-event-filter-node",
+      "name": "Is End-of-call-report?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [-760, 220]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Vapi's end-of-call-report gives the transcript straight in the payload\n// (no follow-up GET call needed, unlike Tavus). Normalize it to the same\n// { transcript, channel } shape the Tavus branch produces, so the shared\n// Claude extraction step downstream doesn't need to know which channel\n// this came from.\nconst body = $json.body;\nconst transcript =\n  body.message?.transcript ||\n  body.message?.artifact?.transcript ||\n  (body.message?.artifact?.messages || [])\n    .map((m) => `${m.role}: ${m.message}`)\n    .join('\\n');\n\nreturn [{\n  json: {\n    transcript,\n    channel: 'voice',\n    conversation_id: body.message?.call?.id,\n  },\n}];"
+      },
+      "id": "normalize-vapi-node",
+      "name": "Normalize Vapi Transcript",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-540, 220]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Tag the Tavus branch's output with channel so downstream steps (Sheets\n// row, notifications) can tell video vs voice leads apart.\nreturn [{\n  json: {\n    ...$json,\n    channel: 'video',\n  },\n}];"
+      },
+      "id": "tag-tavus-channel-node",
+      "name": "Tag Tavus Channel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-320, -100]
+    },
+    {
+      "parameters": {
         "method": "GET",
         "url": "=https://tavusapi.com/v2/conversations/{{ $json.body.conversation_id }}",
         "authentication": "genericCredentialType",
@@ -101,7 +165,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const raw = $input.first().json.content[0].text;\nlet parsed;\ntry {\n  parsed = JSON.parse(raw.replace(/```json|```/g, '').trim());\n} catch (e) {\n  parsed = { lead: {}, qualification: { status: 'needs_human_review', reason: 'parse_error' } };\n}\nreturn [{ json: parsed }];"
+        "jsCode": "const raw = $input.first().json.content[0].text;\nlet parsed;\ntry {\n  parsed = JSON.parse(raw.replace(/```json|```/g, '').trim());\n} catch (e) {\n  parsed = { lead: {}, qualification: { status: 'needs_human_review', reason: 'parse_error' } };\n}\n// Carry the channel tag (video/voice) through from whichever branch ran.\nconst channelSource = $('Tag Tavus Channel').isExecuted\n  ? $('Tag Tavus Channel').item.json.channel\n  : $('Normalize Vapi Transcript').item.json.channel;\nparsed.channel = channelSource;\nreturn [{ json: parsed }];"
       },
       "id": "parse-json-node",
       "name": "Parse Structured Lead",
@@ -127,6 +191,7 @@
             "timeline": "={{ $json.lead.timeline }}",
             "status": "={{ $json.qualification.status }}",
             "reason": "={{ $json.qualification.reason }}",
+            "channel": "={{ $json.channel }}",
             "received_at": "={{ $now.toISO() }}"
           }
         },
@@ -145,7 +210,7 @@
           "conditions": [
             {
               "id": "qualified-check",
-              "leftValue": "={{ $('Parse Structured Lead').item.json.qualification.status }}",
+              "leftValue": "={{ $json.qualification.status }}",
               "rightValue": "unqualified",
               "operator": { "type": "string", "operation": "notEquals" }
             }
@@ -163,8 +228,8 @@
     {
       "parameters": {
         "sendTo": "sales-team@yourcompany.com",
-        "subject": "=New lead from Zain: {{ $('Parse Structured Lead').item.json.lead.company_name || $('Parse Structured Lead').item.json.lead.full_name || 'unknown visitor' }} ({{ $('Parse Structured Lead').item.json.qualification.status }})",
-        "message": "=Business problem: {{ $('Parse Structured Lead').item.json.lead.business_problem }}\nDesired outcome: {{ $('Parse Structured Lead').item.json.lead.desired_outcome }}\nTimeline: {{ $('Parse Structured Lead').item.json.lead.timeline }}\nContact: {{ $('Parse Structured Lead').item.json.lead.full_name }} — {{ $('Parse Structured Lead').item.json.lead.email }} — {{ $('Parse Structured Lead').item.json.lead.phone }}\nQualification: {{ $('Parse Structured Lead').item.json.qualification.status }} — {{ $('Parse Structured Lead').item.json.qualification.reason }}",
+        "subject": "=New lead from Zain: {{ $json.lead.company_name || $json.lead.full_name || 'unknown visitor' }} ({{ $json.qualification.status }})",
+        "message": "=Channel: {{ $json.channel }}\nBusiness problem: {{ $json.lead.business_problem }}\nDesired outcome: {{ $json.lead.desired_outcome }}\nTimeline: {{ $json.lead.timeline }}\nContact: {{ $json.lead.full_name }} — {{ $json.lead.email }} — {{ $json.lead.phone }}\nQualification: {{ $json.qualification.status }} — {{ $json.qualification.reason }}",
         "options": {}
       },
       "id": "notify-sales-node",
@@ -180,13 +245,13 @@
           "conditions": [
             {
               "id": "meeting-requested-check",
-              "leftValue": "={{ $('Parse Structured Lead').item.json.lead.meeting_requested }}",
+              "leftValue": "={{ $json.lead.meeting_requested }}",
               "rightValue": true,
               "operator": { "type": "boolean", "operation": "equals" }
             },
             {
               "id": "has-email-check",
-              "leftValue": "={{ $('Parse Structured Lead').item.json.lead.email }}",
+              "leftValue": "={{ $json.lead.email }}",
               "rightValue": "",
               "operator": { "type": "string", "operation": "notEmpty" }
             }
@@ -208,10 +273,10 @@
         "start": "={{ $now.plus({ days: 1 }).set({ hour: 10, minute: 0, second: 0 }).toISO() }}",
         "end": "={{ $now.plus({ days: 1 }).set({ hour: 10, minute: 30, second: 0 }).toISO() }}",
         "additionalFields": {
-          "summary": "={{ $('Parse Structured Lead').item.json.lead.company_name || $('Parse Structured Lead').item.json.lead.full_name }} <> Our Team",
-          "description": "=Follow-up call booked by Zain (AI sales assistant).\nBusiness problem: {{ $('Parse Structured Lead').item.json.lead.business_problem }}\nDesired outcome: {{ $('Parse Structured Lead').item.json.lead.desired_outcome }}",
+          "summary": "={{ $json.lead.company_name || $json.lead.full_name }} <> Our Team",
+          "description": "=Follow-up call booked by Zain (AI sales assistant).\nBusiness problem: {{ $json.lead.business_problem }}\nDesired outcome: {{ $json.lead.desired_outcome }}",
           "attendeesUi": {
-            "attendeeValues": [{ "email": "={{ $('Parse Structured Lead').item.json.lead.email }}" }]
+            "attendeeValues": [{ "email": "={{ $json.lead.email }}" }]
           },
           "conferenceDataUi": {
             "conferenceDataValues": {
@@ -243,16 +308,26 @@
   ],
   "connections": {
     "Tavus Event Webhook": { "main": [[{ "node": "Verify Shared Secret", "type": "main", "index": 0 }]] },
-    "Verify Shared Secret": { "main": [[{ "node": "Is Transcript Ready?", "type": "main", "index": 0 }], []] },
+    "Verify Shared Secret": { "main": [[{ "node": "Route by Channel", "type": "main", "index": 0 }], []] },
+    "Route by Channel": {
+      "main": [
+        [{ "node": "Is Transcript Ready?", "type": "main", "index": 0 }],
+        [{ "node": "Is End-of-call-report?", "type": "main", "index": 0 }]
+      ]
+    },
     "Is Transcript Ready?": { "main": [[{ "node": "Fetch Full Transcript", "type": "main", "index": 0 }], []] },
-    "Fetch Full Transcript": { "main": [[{ "node": "Extract + Qualify Lead (Claude)", "type": "main", "index": 0 }]] },
+    "Fetch Full Transcript": { "main": [[{ "node": "Tag Tavus Channel", "type": "main", "index": 0 }]] },
+    "Tag Tavus Channel": { "main": [[{ "node": "Extract + Qualify Lead (Claude)", "type": "main", "index": 0 }]] },
+    "Is End-of-call-report?": { "main": [[{ "node": "Normalize Vapi Transcript", "type": "main", "index": 0 }], []] },
+    "Normalize Vapi Transcript": { "main": [[{ "node": "Extract + Qualify Lead (Claude)", "type": "main", "index": 0 }]] },
     "Extract + Qualify Lead (Claude)": { "main": [[{ "node": "Parse Structured Lead", "type": "main", "index": 0 }]] },
     "Parse Structured Lead": { "main": [[{ "node": "Save Lead to Google Sheets", "type": "main", "index": 0 }]] },
-    "Save Lead to Google Sheets": { "main": [[{ "node": "Is Worth Notifying Sales?", "type": "main", "index": 0 }, { "node": "Did Visitor Ask For a Meeting?", "type": "main", "index": 0 }]] },
+    "Save Lead to Google Sheets": { "main": [[{ "node": "Is Worth Notifying Sales?", "type": "main", "index": 0 }]] },
     "Is Worth Notifying Sales?": {
       "main": [
         [
-          { "node": "Notify Sales Team", "type": "main", "index": 0 }
+          { "node": "Notify Sales Team", "type": "main", "index": 0 },
+          { "node": "Did Visitor Ask For a Meeting?", "type": "main", "index": 0 }
         ],
         []
       ]

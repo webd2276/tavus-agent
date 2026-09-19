@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createTavusConversation } from "@/lib/tavus";
+import { parseJsonBody, providerFailure } from "@/lib/http";
 
 const bodySchema = z.object({
   visitor_id: z.string().min(1).max(200),
@@ -15,7 +16,7 @@ const MIN_INTERVAL_MS = 15_000;
 export async function POST(req: NextRequest) {
   let parsed;
   try {
-    parsed = bodySchema.parse(await req.json());
+    parsed = bodySchema.parse(await parseJsonBody(req));
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
@@ -40,11 +41,5 @@ export async function POST(req: NextRequest) {
       status: conversation.status,
     });
     // Note: TAVUS_API_KEY never leaves this function — it is not in the response.
-  } catch (err: any) {
-    console.error("Failed to create Tavus conversation", err);
-    return NextResponse.json(
-      { error: "Could not start the video conversation. Error: " + err.message },
-      { status: 502 }
-    );
-  }
+  } catch (err) { return providerFailure("Failed to create Tavus conversation: " + (err instanceof Error ? err.message : "unknown error")); }
 }

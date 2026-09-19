@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { markEventForwarded, recordProviderEvent } from "@/lib/events";
+import { parseJsonBody } from "@/lib/http";
 
 // Tavus posts conversation lifecycle events here (e.g. conversation.ended,
 // transcription.ready). We do minimal validation, log the event for our
@@ -21,7 +23,7 @@ const tavusEventSchema = z
   .passthrough();
 
 export async function POST(req: NextRequest) {
-  const payload = await req.json().catch(() => null);
+  const payload = await parseJsonBody(req);
 
   const parsed = tavusEventSchema.safeParse(payload);
   if (!parsed.success) {
@@ -30,6 +32,8 @@ export async function POST(req: NextRequest) {
   }
 
   const eventId = parsed.data.event_id ?? parsed.data.message_id;
+  const durable = eventId ? await recordProviderEvent({ source: "tavus", eventType: parsed.data.event_type, eventId, conversationId: parsed.data.conversation_id, payload: parsed.data }) : null;
+  if (durable?.duplicate) return NextResponse.json({ status: "duplicate_ignored" });
   if (eventId) {
     if (seenEventIds.has(eventId)) {
       return NextResponse.json({ status: "duplicate_ignored" });
@@ -63,11 +67,13 @@ export async function POST(req: NextRequest) {
 
     if (!res.ok) {
       console.error("n8n forwarding failed", res.status, await res.text());
-      // Still 200 to Tavus so it doesn't endlessly retry; the failure is
-      // logged here for alerting. Consider a dead-letter queue instead.
+      await markEventForwarded("tavus", eventId ?? "unidentified", `n8n returned ${res.status}`);
+    } else if (eventId) {
+      await markEventForwarded("tavus", eventId);
     }
   } catch (err) {
-    console.error("Error forwarding webhook to n8n", err);
+    console.error("Error forwarding webhook to n8n", err instanceof Error ? err.message : "unknown error");
+    if (eventId) await markEventForwarded("tavus", eventId, "n8n delivery failed");
   }
 
   return NextResponse.json({ status: "received" });
