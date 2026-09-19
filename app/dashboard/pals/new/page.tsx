@@ -1,3 +1,3 @@
 import Link from "next/link";
 import { PalForm } from "../pal-form";
-export default function NewPalPage() { return <main className="min-h-screen bg-[#0F1417] px-6 py-12 text-[#EDEFF1]"><div className="mx-auto max-w-2xl"><Link href="/dashboard" className="text-sm underline">← Dashboard</Link><h1 className="mt-6 text-3xl font-semibold">Create a PAL</h1><PalForm /></div></main>; }
+export default function NewPalPage() { return <main className="zain-shell min-h-screen px-5 py-8 text-zain-ink md:px-8"><div className="mx-auto max-w-3xl"><Link href="/dashboard" className="text-sm text-zain-muted underline underline-offset-4">← PAL management</Link><p className="eyebrow mt-10">New persona deployment</p><h1 className="mt-3 font-display text-4xl font-semibold tracking-tight">Create a PAL</h1><p className="mt-2 text-zain-muted">Define its identity, operating constraints, and availability profile.</p><PalForm /></div></main>; }

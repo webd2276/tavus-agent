@@ -3,142 +3,30 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useState } from "react";
+import { StatusPill, ZainMark } from "./zain-mark";
 
 type CallState = "idle" | "starting" | "active" | "error" | "ended";
 
 function getVisitorId(): string {
   const key = "tavus_visitor_id";
   let id = typeof window === "undefined" ? null : localStorage.getItem(key);
-
-  if (!id) {
-    id = crypto.randomUUID();
-    localStorage.setItem(key, id);
-  }
-
+  if (!id) { id = crypto.randomUUID(); localStorage.setItem(key, id); }
   return id;
 }
 
+function Waveform() { return <div aria-hidden="true" className="flex h-7 items-end gap-1">{[10, 19, 13, 24, 16, 28, 12, 20, 14, 23, 11].map((height, index) => <span key={index} className="w-1 animate-pulse rounded-full bg-zain-sageLight" style={{ height, animationDelay: `${index * 95}ms` }} />)}</div>; }
+
 export default function Home() {
-  const [state, setState] = useState<CallState>("idle");
-  const [conversationUrl, setConversationUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const startCall = useCallback(async () => {
-    setState("starting");
-    setError(null);
-
-    try {
-      const response = await fetch("/api/conversations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ visitor_id: getVisitorId() }),
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Could not start the call");
-      }
-
-      setConversationUrl(data.conversation_url);
-      setState("active");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
-      setState("error");
-    }
-  }, []);
-
-  const endCall = useCallback(() => {
-    setConversationUrl(null);
-    setState("ended");
-  }, []);
-
-  return (
-    <main className="min-h-screen bg-[#0F1417] text-[#EDEFF1]">
-      <div className="mx-auto max-w-5xl px-6 py-16 md:py-24">
-        <div className="mb-16 flex items-start justify-between gap-6">
-          <Image
-            src="/logo.png"
-            alt="Zain AI Video Sales Agent"
-            width={180}
-            height={48}
-            className="h-10 w-auto object-contain"
-            priority
-          />
-          <Link
-            href="/login"
-            className="text-sm text-[#7C848B] transition-colors hover:text-[#B7BEC4]"
-          >
-            Dashboard login
-          </Link>
-        </div>
-        {state !== "active" ? (
-          <>
-            <p className="mb-4 text-sm tracking-wide text-[#7FA890]">
-              Live, two minutes, no forms first
-            </p>
-            <h1 className="max-w-2xl text-4xl font-semibold leading-tight md:text-5xl">
-              Talk to Zain about what you&apos;re trying to solve.
-            </h1>
-            <p className="mt-5 max-w-xl text-lg leading-relaxed text-[#B7BEC4]">
-              Zain is an AI sales assistant — not a human — who asks a few
-              questions on video to see whether our team can actually help.
-              If it&apos;s a fit, she&apos;ll offer you time with someone on the team.
-            </p>
-
-            <div className="mt-10 flex max-w-md flex-col gap-3">
-              {state === "starting" ? (
-                <button
-                  disabled
-                  className="inline-flex items-center justify-center rounded-md bg-[#2A3238] px-6 py-3 font-medium text-[#B7BEC4]"
-                >
-                  Connecting…
-                </button>
-              ) : (
-                <button
-                  onClick={startCall}
-                  className="inline-flex items-center justify-center rounded-md bg-[#7FA890] px-6 py-3 font-medium text-[#0F1417] transition-colors hover:bg-[#93BBA2]"
-                >
-                  Start video conversation
-                </button>
-              )}
-              {state === "error" && (
-                <p className="text-sm text-[#E08585]">
-                  {error}.{" "}
-                  <button onClick={startCall} className="underline">
-                    Try again
-                  </button>
-                </p>
-              )}
-              <p className="text-xs text-[#7C848B] leading-relaxed">
-                You&apos;re talking with an AI, on camera. We&apos;ll ask for your
-                camera and microphone, and the conversation may be recorded
-                for quality and follow-up. See our {" "}
-                <a href="/privacy" className="underline">privacy policy</a>.
-              </p>
-            </div>
-          </>
-        ) : (
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-[#7FA890]">Connected to Zain</span>
-              <button
-                onClick={endCall}
-                className="text-sm text-[#E08585] hover:underline"
-              >
-                End conversation
-              </button>
-            </div>
-            <div className="aspect-video w-full overflow-hidden rounded-lg border border-[#2A3238] bg-[#0B0F11]">
-              <iframe
-                src={conversationUrl ?? undefined}
-                allow="camera; microphone; fullscreen; display-capture"
-                className="h-full w-full"
-                title="Conversation with Zain"
-              />
-            </div>
-          </div>
-        )}
-      </div>
-    </main>
-  );
+  const [state, setState] = useState<CallState>("idle"); const [conversationUrl, setConversationUrl] = useState<string | null>(null); const [error, setError] = useState<string | null>(null);
+  const startCall = useCallback(async () => { setState("starting"); setError(null); try { const response = await fetch("/api/conversations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ visitor_id: getVisitorId() }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || "Could not start the call"); setConversationUrl(data.conversation_url); setState("active"); } catch (err) { setError(err instanceof Error ? err.message : "Something went wrong"); setState("error"); } }, []);
+  const endCall = useCallback(() => { setConversationUrl(null); setState("ended"); }, []);
+  return <main className="zain-shell min-h-dvh text-zain-ink">
+    <header className="sticky top-0 z-20 border-b border-white/5 bg-zain-base/70 backdrop-blur-xl"><div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 md:px-8"><div className="flex items-center gap-3"><ZainMark /><StatusPill>Live AI agent</StatusPill></div><div className="flex items-center gap-3"><Link href="/login" className="hidden text-sm text-zain-muted transition hover:text-zain-ink sm:block">Console sign in</Link><button onClick={startCall} disabled={state === "starting"} className="button-primary px-4 text-sm disabled:cursor-wait disabled:opacity-70">{state === "starting" ? "Connecting…" : "Start conversation"}</button></div></div></header>
+    {state === "active" ? <section className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-8 md:px-8"><div className="glass-panel flex items-center justify-between rounded-2xl px-4 py-3"><StatusPill>Connected to Zain</StatusPill><button onClick={endCall} className="button-secondary min-h-0 border-zain-dangerSurface/60 px-3 py-1.5 text-sm text-zain-danger">End conversation</button></div><div className="aspect-video overflow-hidden rounded-[1.5rem] border border-white/10 bg-zain-deep shadow-glass"><iframe src={conversationUrl ?? undefined} allow="camera; microphone; fullscreen; display-capture" className="h-full w-full" title="Conversation with Zain" /></div></section> : <>
+      <section className="relative overflow-hidden px-5 pb-16 pt-12 md:px-8 lg:pb-24 lg:pt-20"><div aria-hidden="true" className="absolute -right-40 top-0 h-[34rem] w-[34rem] rounded-full bg-zain-sage/15 blur-[130px]" /><div className="relative mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-12"><div className="lg:col-span-7"><StatusPill>Autonomous video intelligence · v2.4 live</StatusPill><h1 className="mt-7 max-w-3xl bg-gradient-to-br from-zain-ink via-zain-ink to-zain-sageLight bg-clip-text font-display text-5xl font-semibold leading-[1.04] tracking-[-.045em] text-transparent md:text-6xl xl:text-7xl">Talk to Zain about what you&apos;re trying to solve.</h1><p className="mt-6 max-w-xl text-base leading-7 text-zain-muted md:text-lg">Instant, autonomous video discovery calls that qualify leads, demonstrate product architecture, and book high-conviction pipeline without forms or latency.</p><div className="mt-8 flex flex-wrap gap-3"><button onClick={startCall} disabled={state === "starting"} className="button-primary gap-2 px-6 py-3 text-base disabled:cursor-wait disabled:opacity-70"><span className="relative flex h-2.5 w-2.5"><span className="absolute h-full w-full animate-ping rounded-full bg-zain-sageDark/70" /><span className="relative h-2.5 w-2.5 rounded-full bg-zain-sageDark" /></span>{state === "starting" ? "Connecting…" : "Start video conversation"} <span aria-hidden="true">→</span></button><Link href="/login" className="button-secondary gap-2 px-5">Explore the console <span aria-hidden="true">↗</span></Link></div>{state === "error" && <p className="mt-4 rounded-lg border border-zain-dangerSurface/70 bg-zain-dangerSurface/20 px-3 py-2 text-sm text-zain-danger" role="alert">{error}. <button onClick={startCall} className="underline">Try again</button></p>}<div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-xs text-zain-muted"><span className="text-zain-sageLight">◆ Sub-150ms synthesis</span><span>◌ SOC-2 Type II</span><span>◌ CRM auto-sync</span></div></div><div className="relative mx-auto w-full max-w-md lg:col-span-5 lg:max-w-none"><div className="absolute -inset-2 rounded-[2rem] bg-zain-sage/20 blur-2xl" /><div className="relative aspect-[4/5] overflow-hidden rounded-[1.75rem] border border-white/10 bg-zain-surface shadow-[0_24px_48px_-12px_rgba(0,0,0,.85)]"><Image src="/zain-agent-avatar.png" alt="Zain, the AI video sales agent" fill priority className="object-cover" sizes="(max-width: 1024px) 90vw, 40vw" /><div className="absolute inset-0 bg-gradient-to-t from-zain-deep via-zain-deep/10 to-zain-deep/45" /><div className="absolute left-4 right-4 top-4 flex items-center justify-between"><StatusPill>Ready to speak · 140ms</StatusPill><span className="rounded-full bg-zain-deep/75 px-3 py-1.5 font-mono text-[10px] text-zain-muted backdrop-blur">HD · spatial audio</span></div><div className="absolute bottom-4 left-4 right-4"><div className="rounded-xl border border-white/10 bg-zain-deep/80 px-4 py-2 backdrop-blur"><Waveform /></div><div className="mt-3 rounded-xl bg-zain-raised/85 p-3 backdrop-blur"><p className="font-display text-sm font-semibold">Zain — Enterprise Architect</p><p className="mt-1 font-mono text-[10px] text-zain-muted">Synthesizing ICP data & product capabilities</p></div></div></div></div></div></section>
+      <section className="border-y border-white/5 bg-zain-deep/75 px-5 py-7 backdrop-blur md:px-8"><div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-8"><div className="flex flex-wrap gap-8"><Metric value="42%" label="Higher conversion vs. static pages" /><Metric value="18,400+" label="Video meetings this week" /><Metric value="98.4%" label="Autonomous accuracy" /></div><p className="font-mono text-[10px] uppercase tracking-[.12em] text-zain-muted">Trusted by high-growth B2B teams</p></div></section>
+      <section className="mx-auto max-w-7xl px-5 py-16 md:px-8 lg:py-24"><p className="eyebrow">01 // value architecture</p><h2 className="mt-3 max-w-xl font-display text-3xl font-semibold tracking-tight md:text-4xl">Human-grade presence at silicon scale.</h2><div className="mt-10 grid gap-5 md:grid-cols-3">{[["01", "Zero friction", "Real-time discovery without multistep qualification drops."], ["02", "High conviction", "Value-dense sessions shaped around buyer context and needs."], ["03", "Human handoff", "Seamless transitions into your team when there is a fit."]].map(([index, title, copy]) => <article key={index} className="glass-panel rounded-2xl p-6 transition duration-200 hover:-translate-y-1 hover:border-zain-sage/50"><p className="font-mono text-xs text-zain-sageLight">{index} / INTELLIGENCE</p><h3 className="mt-5 font-display text-xl font-semibold">{title}</h3><p className="mt-3 leading-6 text-zain-muted">{copy}</p></article>)}</div></section>
+    </>}</main>;
 }
+
+function Metric({ value, label }: { value: string; label: string }) { return <div className="flex items-baseline gap-2"><strong className="font-display text-3xl text-zain-sageLight">{value}</strong><span className="max-w-28 text-xs leading-4 text-zain-muted">{label}</span></div>; }

@@ -19,7 +19,7 @@ function LoginForm() {
     if (error) return setError(error.message);
     router.push(params.get("next") || "/dashboard"); router.refresh();
   }
-  return <div className="relative"><Link href="/" className="absolute left-6 top-6 text-sm text-[#7C848B] transition-colors hover:text-[#B7BEC4]">← Back to site</Link><AuthShell title="Sign in" onSubmit={submit} error={error} loading={loading} submit="Sign in" alternate={<><span>New here? </span><Link href="/signup" className="underline">Create an account</Link></>} /></div>;
+  return <div className="relative"><Link href="/" className="absolute left-5 top-5 z-10 rounded px-2 py-1 text-sm text-zain-muted transition-colors hover:text-zain-ink">← Back to site</Link><AuthShell title="Sign in" onSubmit={submit} error={error} loading={loading} submit="Sign in" alternate={<><span>New here? </span><Link href="/signup" className="text-zain-sageLight underline underline-offset-4">Create an account</Link></>} /></div>;
 }
 
 export default function LoginPage() {
